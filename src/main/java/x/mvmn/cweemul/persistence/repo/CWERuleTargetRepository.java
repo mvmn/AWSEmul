@@ -1,7 +1,6 @@
 package x.mvmn.cweemul.persistence.repo;
 
 import java.util.List;
-import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
@@ -10,17 +9,14 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.transaction.annotation.Transactional;
 
 import x.mvmn.cweemul.persistence.model.CWERule;
+import x.mvmn.cweemul.persistence.model.CWERuleTarget;
 
-public interface CWERuleRepository extends JpaRepository<CWERule, Long> {
+public interface CWERuleTargetRepository extends JpaRepository<CWERuleTarget, Long> {
 
-	List<CWERule> findByNameStartsWith(String trim);
+	@Query("SELECT rt FROM CWERuleTarget rt WHERE rt.rule.name = :ruleName")
+	List<CWERuleTarget> findByRuleName(@Param("ruleName") String ruleName);
 
 	@Transactional
 	@Modifying
-	int deleteByName(String name);
-
-	Optional<CWERule> findByName(String name);
-
-	@Query("SELECT DISTINCT rt.rule FROM CWERuleTarget rt WHERE rt.targetArn = :arn")
-	List<CWERule> findRulesByTargetArn(@Param("arn") String targetArn);
+	int deleteByRule(CWERule rule);
 }

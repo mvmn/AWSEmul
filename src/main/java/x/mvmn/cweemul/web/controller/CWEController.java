@@ -1,9 +1,10 @@
 package x.mvmn.cweemul.web.controller;
 
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.stream.Collectors;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpServletResponse;
 import javax.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,12 +15,21 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import x.mvmn.cweemul.persistence.model.CWERule;
+import x.mvmn.cweemul.persistence.model.CWERuleTarget;
 import x.mvmn.cweemul.persistence.repo.CWERuleRepository;
+import x.mvmn.cweemul.persistence.repo.CWERuleTargetRepository;
 import x.mvmn.cweemul.web.dto.mapping.CWERuleMapper;
 import x.mvmn.cweemul.web.dto.model.CWERuleDto;
 import x.mvmn.cweemul.web.dto.model.CWERulesListDto;
-import x.mvmn.cweemul.web.dto.model.request.DeleteRuleRequest;
+import x.mvmn.cweemul.web.dto.model.request.DeleteRuleRequestDto;
+import x.mvmn.cweemul.web.dto.model.request.DeleteTargetsByRuleRequestDto;
+import x.mvmn.cweemul.web.dto.model.request.ListRuleNamesByTargetRequestDto;
 import x.mvmn.cweemul.web.dto.model.request.ListRulesRequestDto;
+import x.mvmn.cweemul.web.dto.model.request.ListTargetsByRuleRequestDto;
+import x.mvmn.cweemul.web.dto.model.request.PutRuleTargetsRequestDto;
+import x.mvmn.cweemul.web.dto.model.response.ListRuleNamesByTargetResponseDto;
+import x.mvmn.cweemul.web.dto.model.response.ListTargetsByRuleResponseDto;
+import x.mvmn.cweemul.web.dto.model.response.PutTargetsResponseDto;
 import x.mvmn.cweemul.web.exception.ApiGenericException;
 
 @RestController
@@ -28,6 +38,9 @@ public class CWEController {
 
 	@Autowired
 	protected CWERuleRepository cweRuleRepository;
+
+	@Autowired
+	protected CWERuleTargetRepository cweRuleTargetRepository;
 
 	@Autowired
 	protected CWERuleMapper cweRuleMapper;
@@ -52,29 +65,43 @@ public class CWEController {
 	}
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.DeleteRule")
-	public void deleteRule(@RequestBody @Valid DeleteRuleRequest req) {
+	public void deleteRule(@RequestBody @Valid DeleteRuleRequestDto req) {
 		if (cweRuleRepository.deleteByName(req.getName()) < 1) {
 			throw new ApiGenericException(404, "No rule present with name " + req.getName());
 		}
 	}
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.PutTargets")
-	public void putTargets(HttpServletRequest req, HttpServletResponse resp) {
-		System.out.println("putTargets");
-	}
-
-	@PostMapping(headers = "X-Amz-Target=AWSEvents.RemoveTargets")
-	public void removeTargets(HttpServletRequest req, HttpServletResponse resp) {
-		System.out.println("removeTargets");
+	public PutTargetsResponseDto putTargets(@RequestBody @Valid PutRuleTargetsRequestDto req) {
+		CWERule rule = cweRuleRepository.findByName(req.getRule())
+				.orElseThrow(() -> new ApiGenericException(404, "No rule present with name " + req.getRule()));
+		List<CWERuleTarget> targets = req.getTargets().stream().map(cweRuleMapper::fromDto).peek(t -> t.setRule(rule)).collect(Collectors.toList());
+		cweRuleTargetRepository.saveAll(targets);
+		return new PutTargetsResponseDto();
 	}
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.ListTargetsByRule")
-	public void listTargetsByRule(HttpServletRequest req, HttpServletResponse resp) {
-		System.out.println("listTargetsByRule");
+	public ListTargetsByRuleResponseDto listTargetsByRule(@RequestBody @Valid ListTargetsByRuleRequestDto req) {
+		return new ListTargetsByRuleResponseDto(
+				cweRuleTargetRepository.findByRuleName(req.getRule()).stream().map(cweRuleMapper::toDto).collect(Collectors.toList()));
+	}
+
+	@PostMapping(headers = "X-Amz-Target=AWSEvents.RemoveTargets")
+	public PutTargetsResponseDto removeTargets(@RequestBody @Valid DeleteTargetsByRuleRequestDto req) {
+		List<CWERuleTarget> targets = cweRuleTargetRepository.findByRuleName(req.getRule());
+		Set<String> ids = targets.stream().map(CWERuleTarget::getTargetId).collect(Collectors.toSet());
+		if (!ids.containsAll(req.getIds())) {
+			throw new ApiGenericException(400, "Bad target IDs");
+		}
+		Set<String> idsToRemove = new HashSet<>(req.getIds());
+		List<CWERuleTarget> targetsToRemove = targets.stream().filter(t -> idsToRemove.contains(t.getTargetId())).collect(Collectors.toList());
+		cweRuleTargetRepository.deleteAll(targetsToRemove);
+		return new PutTargetsResponseDto();
 	}
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.ListRuleNamesByTarget")
-	public void listRuleNamesByTarget(HttpServletRequest req, HttpServletResponse resp) {
-		System.out.println("listRuleNamesByTarget");
+	public ListRuleNamesByTargetResponseDto listRuleNamesByTarget(@RequestBody @Valid ListRuleNamesByTargetRequestDto dto) {
+		return new ListRuleNamesByTargetResponseDto(
+				cweRuleRepository.findRulesByTargetArn(dto.getTargetArn()).stream().map(CWERule::getName).collect(Collectors.toList()));
 	}
 }
