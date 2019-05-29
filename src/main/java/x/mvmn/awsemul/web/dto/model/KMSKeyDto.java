@@ -3,11 +3,9 @@ package x.mvmn.awsemul.web.dto.model;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.Data;
-import lombok.NoArgsConstructor;
 import x.mvmn.awsemul.persistence.model.KMSKey;
 
 @Data
-@NoArgsConstructor
 public class KMSKeyDto {
 	@JsonProperty("Arn")
 	protected String arn;
