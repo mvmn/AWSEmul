@@ -7,6 +7,8 @@ import java.util.stream.Collectors;
 
 import javax.validation.Valid;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -20,6 +22,7 @@ import x.mvmn.awsemul.persistence.repo.CWERuleRepository;
 import x.mvmn.awsemul.persistence.repo.CWERuleTargetRepository;
 import x.mvmn.awsemul.web.dto.mapping.CWERuleMapper;
 import x.mvmn.awsemul.web.dto.model.CWERuleDto;
+import x.mvmn.awsemul.web.dto.model.CWERuleTargetDto;
 import x.mvmn.awsemul.web.dto.model.CWERulesListDto;
 import x.mvmn.awsemul.web.dto.model.request.DeleteRuleRequestDto;
 import x.mvmn.awsemul.web.dto.model.request.DeleteTargetsByRuleRequestDto;
@@ -36,6 +39,8 @@ import x.mvmn.awsemul.web.exception.ApiGenericException;
 @RequestMapping(value = "/cwe", produces = "application/x-amz-json-1.1")
 public class CWEController {
 
+	private static final Logger LOGGER = LoggerFactory.getLogger(CWEController.class);
+
 	@Autowired
 	protected CWERuleRepository cweRuleRepository;
 
@@ -47,6 +52,7 @@ public class CWEController {
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.ListRules")
 	public CWERulesListDto listRules(@RequestBody @Valid ListRulesRequestDto request) {
+		LOGGER.info("CWE: Listing rules " + request.getNamePrefix() + "*");
 		return new CWERulesListDto((request != null && request.getNamePrefix() != null && !request.getNamePrefix().trim().isEmpty()
 				? cweRuleRepository.findByNameStartsWith(request.getNamePrefix().trim())
 				: cweRuleRepository.findAll()).stream().map(cweRuleMapper::toDto).collect(Collectors.toList()));
@@ -55,6 +61,7 @@ public class CWEController {
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.PutRule")
 	@Transactional
 	public CWERuleDto putRule(@RequestBody @Valid CWERuleDto dto) {
+		LOGGER.info("CWE: Creating rule " + dto.getName());
 		dto.setState("ENABLED");
 		String ruleNameEscaped = dto.getName().replaceAll(" ", "_");
 		CWERule rule = cweRuleMapper.fromDto(dto);
@@ -66,6 +73,7 @@ public class CWEController {
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.DeleteRule")
 	public void deleteRule(@RequestBody @Valid DeleteRuleRequestDto req) {
+		LOGGER.info("CWE: Deleting rule " + req.getName());
 		if (cweRuleRepository.deleteByName(req.getName()) < 1) {
 			throw new ApiGenericException(404, "No rule present with name " + req.getName());
 		}
@@ -73,6 +81,8 @@ public class CWEController {
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.PutTargets")
 	public PutTargetsResponseDto putTargets(@RequestBody @Valid PutRuleTargetsRequestDto req) {
+		LOGGER.info(
+				"CWE: Putting rule " + req.getRule() + " targets " + req.getTargets().stream().map(CWERuleTargetDto::getId).collect(Collectors.joining(", ")));
 		CWERule rule = cweRuleRepository.findByName(req.getRule())
 				.orElseThrow(() -> new ApiGenericException(404, "No rule present with name " + req.getRule()));
 		List<CWERuleTarget> targets = req.getTargets().stream().map(cweRuleMapper::fromDto).peek(t -> t.setRule(rule)).collect(Collectors.toList());
@@ -82,12 +92,14 @@ public class CWEController {
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.ListTargetsByRule")
 	public ListTargetsByRuleResponseDto listTargetsByRule(@RequestBody @Valid ListTargetsByRuleRequestDto req) {
+		LOGGER.info("CWE: Listing targets by rule " + req.getRule());
 		return new ListTargetsByRuleResponseDto(
 				cweRuleTargetRepository.findByRuleName(req.getRule()).stream().map(cweRuleMapper::toDto).collect(Collectors.toList()));
 	}
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.RemoveTargets")
 	public PutTargetsResponseDto removeTargets(@RequestBody @Valid DeleteTargetsByRuleRequestDto req) {
+		LOGGER.info("CWE: Removing rule " + req.getRule() + " targets " + req.getIds().stream().collect(Collectors.joining(", ")));
 		List<CWERuleTarget> targets = cweRuleTargetRepository.findByRuleName(req.getRule());
 		Set<String> ids = targets.stream().map(CWERuleTarget::getTargetId).collect(Collectors.toSet());
 		if (!ids.containsAll(req.getIds())) {
@@ -101,6 +113,7 @@ public class CWEController {
 
 	@PostMapping(headers = "X-Amz-Target=AWSEvents.ListRuleNamesByTarget")
 	public ListRuleNamesByTargetResponseDto listRuleNamesByTarget(@RequestBody @Valid ListRuleNamesByTargetRequestDto dto) {
+		LOGGER.info("CWE: Listing rule names by target " + dto.getTargetArn());
 		return new ListRuleNamesByTargetResponseDto(
 				cweRuleRepository.findRulesByTargetArn(dto.getTargetArn()).stream().map(CWERule::getName).collect(Collectors.toList()));
 	}
