@@ -33,7 +33,7 @@ import x.mvmn.awsemul.web.dto.model.response.PutTargetsResponseDto;
 import x.mvmn.awsemul.web.exception.ApiGenericException;
 
 @RestController
-@RequestMapping(value = "/", produces = "application/x-amz-json-1.1")
+@RequestMapping(value = "/cwe", produces = "application/x-amz-json-1.1")
 public class CWEController {
 
 	@Autowired
