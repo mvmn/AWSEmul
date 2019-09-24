@@ -18,7 +18,7 @@
 	<properties>
 		<java.version>1.8</java.version>
 
-		<mainClass>x.mvmn.cweemul.MVMnCWEEmul</mainClass>
+		<mainClass>x.mvmn.awsemul.MVMnAWSEmul</mainClass>
 
 		<org.mapstruct.version>1.2.0.Final</org.mapstruct.version>
 		<org.projectlombok.version>1.16.22</org.projectlombok.version>
@@ -71,6 +71,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.dataformat</groupId>
+			<artifactId>jackson-dataformat-xml</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>com.h2database</groupId>
