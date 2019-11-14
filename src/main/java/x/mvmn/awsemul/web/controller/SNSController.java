@@ -54,4 +54,6 @@ public class SNSController {
 	}
 
 	public void snsDoSubscribe(Map<String, String> body, Map<String, String> result) {}
+
+	public void snsDoPublish(Map<String, String> body, Map<String, String> result) {}
 }
