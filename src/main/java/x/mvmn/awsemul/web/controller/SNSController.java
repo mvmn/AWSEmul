@@ -1,8 +1,13 @@
 package x.mvmn.awsemul.web.controller;
 
 import java.lang.reflect.Method;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -16,8 +21,11 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 
-import x.mvmn.awsemul.persistence.repo.KMSKeyRepository;
-import x.mvmn.awsemul.web.dto.mapping.KMSKeyMapper;
+import com.amazonaws.services.sqs.AmazonSQS;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import x.mvmn.awsemul.web.dto.model.response.SnsCreateTopicResponse;
 
 @RestController
 @RequestMapping(value = "/sns", produces = MediaType.APPLICATION_XML_VALUE, consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
@@ -26,20 +34,26 @@ public class SNSController {
 	private static final Logger LOGGER = LoggerFactory.getLogger(SNSController.class);
 
 	@Autowired
-	KMSKeyRepository kmsKeyRepository;
+	protected AmazonSQS sqs;
 
 	@Autowired
-	KMSKeyMapper kmsKeyMapper;
+	protected ObjectMapper objectMapper;
+
+	protected static Map<String, Set<String>> SUBSCRIPTIONS = new HashMap<>();
 
 	@RequestMapping("*")
-	public @ResponseBody Map<String, String> ok(HttpServletRequest req, HttpServletResponse resp, @RequestParam Map<String, String> body) {
-		Map<String, String> result = new HashMap<String, String>();
+	public @ResponseBody Object ok(HttpServletRequest req, HttpServletResponse resp, @RequestParam Map<String, String> body) {
+		Object result = null;
 		String action = body.get("Action");
-		LOGGER.info("SNS action " + action);
+		LOGGER.info("SNS action " + action + ": " + body);
 
 		try {
-			Method mehod = this.getClass().getDeclaredMethod("snsDo" + action, Map.class, Map.class);
-			mehod.invoke(this, body, result);
+			Method mehod = this.getClass().getDeclaredMethod("snsDo" + action, Map.class);
+			System.out.println(req.getRequestURL().toString() + "?" + req.getQueryString() + "# "
+					+ Collections.list(req.getHeaderNames()).stream()
+							.map(hn -> hn + "=" + Collections.list(req.getHeaders(hn)).stream().collect(Collectors.joining("; ")))
+							.collect(Collectors.joining(", ")));
+			result = mehod.invoke(this, body);
 		} catch (NoSuchMethodException nsme) {
 			resp.setStatus(404);
 		} catch (Exception e) {
@@ -49,11 +63,47 @@ public class SNSController {
 		return result;
 	}
 
-	public void snsDoCreateTopic(Map<String, String> body, Map<String, String> result) {
-		result.put("TopicArn", "arn:aws:sns:us-east-1:000000000000:" + body.get("Name"));
+	public SnsCreateTopicResponse snsDoCreateTopic(Map<String, String> body) {
+		SnsCreateTopicResponse response = new SnsCreateTopicResponse();
+		response.getResult().setValue("arn:aws:sns:us-east-1:000000000000:" + body.get("Name"));
+
+		return response;
 	}
 
-	public void snsDoSubscribe(Map<String, String> body, Map<String, String> result) {}
+	public Object snsDoSubscribe(Map<String, String> body) {
+		System.out.println(body);
+		String topicArn = body.get("TopicArn");
+		String target = body.get("Endpoint");
+		if (target != null && target.startsWith("arn:aws:sqs:elasticmq")) {
+			Set<String> subsForTopic;
+			synchronized (SUBSCRIPTIONS) {
+				subsForTopic = SUBSCRIPTIONS.get(topicArn);
+				if (subsForTopic == null) {
+					subsForTopic = Collections.synchronizedSet(new HashSet<>());
+					SUBSCRIPTIONS.put(topicArn, subsForTopic);
+				}
+			}
+			subsForTopic.add(target);
+		}
+		return Collections.emptyMap();
+	}
 
-	public void snsDoPublish(Map<String, String> body, Map<String, String> result) {}
+	public Object snsDoPublish(Map<String, String> body) throws JsonProcessingException {
+		System.out.println(body);
+		String topicArn = body.get("TopicArn");
+		String message = body.get("Message");
+		Map<String, Object> payload = new HashMap<>();
+		payload.put("Message", message);
+		payload.put("MessageId", UUID.randomUUID().toString());
+		payload.put("Type", "Notification");
+		payload.put("TopicArn", topicArn);
+		Set<String> subsForTopic = SUBSCRIPTIONS.get(topicArn);
+		if (subsForTopic != null) {
+			for (String target : new HashSet<>(subsForTopic)) {
+				sqs.sendMessage(sqs.getQueueUrl(target.substring(target.lastIndexOf(":") + 1)).getQueueUrl(),
+						objectMapper.writeValueAsString(payload));
+			}
+		}
+		return Collections.emptyMap();
+	}
 }

@@ -18,9 +18,6 @@ public class MVMnAWSEmul {
 	public static void main(String args[]) throws Exception {
 		List<String> arguments = Stream.of(args).collect(Collectors.toList());
 		File awsEmulFolder = new File(new File(System.getProperty("user.home", ".")), ".awsemul");
-		new File(awsEmulFolder, "db").mkdirs();
-		System.out
-				.println("Started AWS CWE/KMS emulator at port " + SpringApplication.run(MVMnAWSEmul.class, args).getEnvironment().getProperty("server.port"));
 
 		int sqsPort = 9324;
 		int s3Port = 9325;
@@ -38,5 +35,11 @@ public class MVMnAWSEmul {
 		SQSRestServerBuilder.withPort(sqsPort).start();
 		System.out.println("Starting S3 emulator at port " + s3Port);
 		new S3Mock.Builder().withPort(s3Port).withFileBackend(awsEmulFolder.getCanonicalPath()).build().start();
+
+		new File(awsEmulFolder, "db").mkdirs();
+		
+		System.setProperty("cweemul.sqs.port", String.valueOf(sqsPort));
+		System.out.println("Started AWS CWE/KMS emulator at port "
+				+ SpringApplication.run(MVMnAWSEmul.class, args).getEnvironment().getProperty("server.port"));
 	}
 }

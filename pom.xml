@@ -125,5 +125,10 @@
 			<artifactId>s3mock_2.11</artifactId>
 			<version>0.2.4</version>
 		</dependency>
+		<dependency>
+			<groupId>com.amazonaws</groupId>
+			<artifactId>aws-java-sdk-sqs</artifactId>
+			<version>1.11.714</version>
+		</dependency>
 	</dependencies>
 </project>
