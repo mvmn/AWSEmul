@@ -18,8 +18,9 @@ import org.springframework.web.bind.annotation.RestController;
 import x.mvmn.awsemul.persistence.model.SecManSecret;
 import x.mvmn.awsemul.persistence.repo.SecManSecretRepository;
 import x.mvmn.awsemul.web.dto.model.request.CreateSecManSecretRequestDto;
-import x.mvmn.awsemul.web.dto.model.request.GetSecManSecretValueRequestDto;
+import x.mvmn.awsemul.web.dto.model.request.SecretIdDto;
 import x.mvmn.awsemul.web.dto.model.response.GetSecManSecretsListResponseDto;
+import x.mvmn.awsemul.web.dto.model.response.SecManDeleteSecretResponseDto;
 import x.mvmn.awsemul.web.dto.model.response.SecManSecretExtDto;
 import x.mvmn.awsemul.web.dto.model.response.SecManSecretShortDto;
 import x.mvmn.awsemul.web.exception.ApiGenericException;
@@ -45,22 +46,37 @@ public class SecManController {
 	public SecManSecretShortDto createSecret(@RequestBody @Valid CreateSecManSecretRequestDto request) {
 		SecManSecret secret = SecManSecret.builder().name(request.getName()).description(request.getDescription())
 				.kmsKeyId(request.getKmsKeyId()).secretString(request.getSecretString())
-				.secretBinary(secretBinary(request.getSecretBinary())).lastChangeDate(System.currentTimeMillis()).build();
+				.secretBinary(secretBinary(request.getSecretBinary())).lastChangeDate(System.currentTimeMillis() / 1000).build();
 		secret = repository.save(secret);
 		return SecManSecretShortDto.builder().name(secret.getName()).arn(secret.getArn()).versionId("1").build();
 	}
 
 	@PostMapping(headers = "X-Amz-Target=secretsmanager.GetSecretValue")
-	public SecManSecretExtDto getSecretValue(@RequestBody @Valid GetSecManSecretValueRequestDto request) {
-		String secretId = request.getSecretId();
-		if (secretId.startsWith("arn:aws:secretsmanager:")) {
-			// "arn:aws:secretsmanager:us-east-1:123456789012:secret:" + name + "-123abc";
-			secretId = secretId.replaceAll("^arn:aws:secretsmanager:[^:]+:[^:]+:[^:]+:(.+)-[A-Za-z0-9]+$", "$1");
-		}
+	public SecManSecretExtDto getSecretValue(@RequestBody @Valid SecretIdDto request) {
+		String secretId = secretIdToName(request.getSecretId());
 		SecManSecret secret = repository.findByName(secretId).orElseThrow(() -> new ApiGenericException(404, "Not found"));
 		return SecManSecretExtDto.builder().name(secret.getName()).arn(secret.getArn()).versionId("1")
 				.versionStages(Arrays.asList("AWSCURRENT")).secretString(secret.getSecretString())
 				.secretBinary(secretBinary(secret.getSecretBinary())).kmskeyId(secret.getKmsKeyId()).build();
+	}
+
+	@PostMapping(headers = "X-Amz-Target=secretsmanager.DeleteSecret")
+	public SecManDeleteSecretResponseDto deleteSecret(@RequestBody @Valid SecretIdDto request) {
+		String name = secretIdToName(request.getSecretId());
+		if (repository.deleteByName(name) < 1) {
+			throw new ApiGenericException(404, "Not found");
+		}
+		return SecManDeleteSecretResponseDto.builder().name(name)
+				.arn("arn:aws:secretsmanager:us-east-1:123456789012:secret:" + name + "-123abc")
+				.deletionDate(System.currentTimeMillis() / 1000).build();
+	}
+
+	private String secretIdToName(String secretId) {
+		if (secretId.startsWith("arn:aws:secretsmanager:")) {
+			// "arn:aws:secretsmanager:us-east-1:123456789012:secret:" + name + "-123abc";
+			secretId = secretId.replaceAll("^arn:aws:secretsmanager:[^:]+:[^:]+:[^:]+:(.+)-[A-Za-z0-9]+$", "$1");
+		}
+		return secretId;
 	}
 
 	private String secretBinary(byte[] secretBinary) {

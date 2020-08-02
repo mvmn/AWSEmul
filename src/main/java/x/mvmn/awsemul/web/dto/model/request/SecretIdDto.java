@@ -7,7 +7,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
 
 @Data
-public class GetSecManSecretValueRequestDto {
+public class SecretIdDto {
 	@JsonProperty("SecretId")
 	@NotEmpty
 	private String secretId;
