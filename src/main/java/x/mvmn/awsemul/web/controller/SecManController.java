@@ -19,6 +19,7 @@ import x.mvmn.awsemul.persistence.model.SecManSecret;
 import x.mvmn.awsemul.persistence.repo.SecManSecretRepository;
 import x.mvmn.awsemul.web.dto.model.request.CreateSecManSecretRequestDto;
 import x.mvmn.awsemul.web.dto.model.request.SecretIdDto;
+import x.mvmn.awsemul.web.dto.model.request.UpdateSecManSecretRequestDto;
 import x.mvmn.awsemul.web.dto.model.response.GetSecManSecretsListResponseDto;
 import x.mvmn.awsemul.web.dto.model.response.SecManDeleteSecretResponseDto;
 import x.mvmn.awsemul.web.dto.model.response.SecManSecretExtDto;
@@ -60,7 +61,7 @@ public class SecManController {
 				.secretBinary(secretBinary(secret.getSecretBinary())).kmskeyId(secret.getKmsKeyId()).build();
 	}
 
-	@PostMapping(headers = "X-Amz-Target=secretsmanager.DeleteSecret")
+	@PostMapping(headers = "X-Amz-Target=secretsmanager.UpdateSecret")
 	public SecManDeleteSecretResponseDto deleteSecret(@RequestBody @Valid SecretIdDto request) {
 		String name = secretIdToName(request.getSecretId());
 		if (repository.deleteByName(name) < 1) {
@@ -69,6 +70,17 @@ public class SecManController {
 		return SecManDeleteSecretResponseDto.builder().name(name)
 				.arn("arn:aws:secretsmanager:us-east-1:123456789012:secret:" + name + "-123abc")
 				.deletionDate(System.currentTimeMillis() / 1000).build();
+	}
+
+	@PostMapping(headers = "X-Amz-Target=secretsmanager.DeleteSecret")
+	public SecManSecretShortDto updateSecret(@RequestBody @Valid UpdateSecManSecretRequestDto request) {
+		SecManSecret secret = repository.findByName(request.getSecretId()).orElseThrow(() -> new ApiGenericException(404, "Not found"));
+		secret.setSecretString(request.getSecretString());
+		secret.setSecretBinary(secretBinary(request.getSecretBinary()));
+		secret.setKmsKeyId(request.getKmsKeyId());
+		secret.setDescription(request.getDescription());
+		secret = repository.save(secret);
+		return SecManSecretShortDto.builder().name(secret.getName()).arn(secret.getArn()).versionId("1").build();
 	}
 
 	private String secretIdToName(String secretId) {
