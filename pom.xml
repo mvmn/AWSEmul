@@ -22,7 +22,7 @@
 
 		<org.mapstruct.version>1.2.0.Final</org.mapstruct.version>
 		<org.projectlombok.version>1.18.12</org.projectlombok.version>
-		<swagger2.version>2.9.2</swagger2.version>
+		<swagger2.version>2.10.0</swagger2.version>
 	</properties>
 
 	<build>
